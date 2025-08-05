@@ -1,7 +1,7 @@
 from flask import Flask, request, abort
 from linebot.v3 import WebhookHandler
 from linebot.v3.messaging import MessagingApi, ReplyMessageRequest, TextMessage
-from linebot.v3.webhooks import MessageEvent, TextMessageContent, JoinEvent
+from linebot.v3.webhooks import MessageEvent, TextMessageContent, JoinEvent, MemberLeftEvent
 from linebot.v3.exceptions import InvalidSignatureError
 import os
 
@@ -13,7 +13,7 @@ channel_secret = os.getenv("LINE_CHANNEL_SECRET")
 handler = WebhookHandler(channel_secret)
 line_bot_api = MessagingApi(channel_access_token)
 
-EXPECTED_GROUP_NAME = "ลูกค้าOh!DudeVip"  # 👈 ตั้งชื่อกลุ่มที่ต้องการให้คงไว้
+EXPECTED_GROUP_NAME = "ลูกค้าOh!dudeVip"  # 👈 เปลี่ยนตรงนี้ให้ตรงกับชื่อกลุ่มจริง
 
 @handler.add(MessageEvent)
 def handle_message(event):
@@ -48,10 +48,16 @@ def handle_message(event):
             except Exception as e:
                 print("❌ ดึงชื่อกลุ่มไม่สำเร็จ:", e)
 
+@handler.add(MemberLeftEvent)
+def handle_member_left(event):
+    alert = "⚠️ แจ้งเตือน: มีสมาชิกออกจากกลุ่ม อาจจะโดนเตะหรือออกเอง"
+    print(alert)  # ไม่มี reply_token ส่งใน event นี้
+    # ถ้าอยากแจ้งในกลุ่ม ต้องใช้ push message แทน
+
 @handler.add(JoinEvent)
 def handle_join(event):
-    welcome_msg = "👋 สวัสดีจ้า! บอทนี้จะช่วยดูแลไม่ให้เปลี่ยนชื่อกลุ่มหรือส่งลิงก์ที่ไม่เกี่ยวกับ OhShop นะจ๊ะ"
-    line_bot_api.reply_message
+    welcome_msg = "👋 สวัสดีจ้า! บอทนี้จะช่วยดูแลไม่ให้เปลี่ยนชื่อกลุ่มหรือส่งลิงก์ที่ไม่เกี่ยวกับ Ohshop นะจ๊ะ"
+    line_bot_api.reply_message(
         ReplyMessageRequest(
             reply_token=event.reply_token,
             messages=[TextMessage(text=welcome_msg)]
