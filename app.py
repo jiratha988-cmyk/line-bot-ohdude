@@ -8,9 +8,8 @@ import re
 
 app = Flask(__name__)
 
-# 👇 ใส่ token ตรงๆ
-channel_access_token = "nJ8q2oRAeGr6RJu5HaTacbqcSj6V/G6h3+JqybmQOwrKvBc9+fuazOLFtxN+fudlHIz74JfCGVRel7mfchKJ6JKIM5YtNEIAGhERiuQ/RzdMl+4IdKr/7CqazfL4iH/Re28iKweets0hSHtSnNXtCQdB04t89/1O/w1cDnyilFU="
-channel_secret = "4786ba44508e1a44a245b5c4833d1eeb"
+channel_access_token = os.getenv("LINE_CHANNEL_ACCESS_TOKEN")
+channel_secret = os.getenv("LINE_CHANNEL_SECRET")
 
 handler = WebhookHandler(channel_secret)
 line_bot_api = MessagingApi(channel_access_token)
