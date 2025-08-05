@@ -13,7 +13,7 @@ channel_secret = os.getenv("LINE_CHANNEL_SECRET")
 handler = WebhookHandler(channel_secret)
 line_bot_api = MessagingApi(channel_access_token)
 
-EXPECTED_GROUP_NAME = "ลูกค้าOh!dudeVip"  # 👈 เปลี่ยนตรงนี้ให้ตรงกับชื่อกลุ่มที่ต้องการ
+EXPECTED_GROUP_NAME = "ลูกค้าOh!DudeVip"  # 👈 ตั้งชื่อกลุ่มที่ต้องการให้คงไว้
 
 @handler.add(MessageEvent)
 def handle_message(event):
@@ -38,7 +38,7 @@ def handle_message(event):
                 current_name = group_summary.group_name
 
                 if current_name != EXPECTED_GROUP_NAME:
-                    alert = f"⚠️ ระบบตรวจพบว่าชื่อกลุ่มถูกเปลี่ยน กรุณาเปลี่ยนกลับเป็น: {Oh!DudeVip}"
+                    alert = f"⚠️ ระบบตรวจพบว่าชื่อกลุ่มถูกเปลี่ยน กรุณาเปลี่ยนกลับเป็น: {EXPECTED_GROUP_NAME}"
                     line_bot_api.reply_message(
                         ReplyMessageRequest(
                             reply_token=event.reply_token,
@@ -50,8 +50,8 @@ def handle_message(event):
 
 @handler.add(JoinEvent)
 def handle_join(event):
-    welcome_msg = "👋 สวัสดีจ้า! บอทนี้จะช่วยดูแลไม่ให้เปลี่ยนชื่อกลุ่มหรือส่งลิงก์ที่ไม่เกี่ยวกับ Ohshop นะจ๊ะ"
-    line_bot_api.reply_message(
+    welcome_msg = "👋 สวัสดีจ้า! บอทนี้จะช่วยดูแลไม่ให้เปลี่ยนชื่อกลุ่มหรือส่งลิงก์ที่ไม่เกี่ยวกับ OhShop นะจ๊ะ"
+    line_bot_api.reply_message
         ReplyMessageRequest(
             reply_token=event.reply_token,
             messages=[TextMessage(text=welcome_msg)]
