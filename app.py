@@ -1,104 +1,77 @@
 from flask import Flask, request, abort
 from linebot.v3 import WebhookHandler
-from linebot.v3.messaging import MessagingApi, ReplyMessageRequest, TextMessage, PushMessageRequest
+from linebot.v3.messaging import (
+    MessagingApi,
+    ReplyMessageRequest,
+    PushMessageRequest,
+    TextMessage,
+)
 from linebot.v3.webhooks import MessageEvent, TextMessageContent, JoinEvent, MemberLeftEvent
 from linebot.v3.exceptions import InvalidSignatureError
 import os
-import random
 
 app = Flask(__name__)
 
-# ENV variables
 channel_access_token = os.getenv("LINE_CHANNEL_ACCESS_TOKEN")
 channel_secret = os.getenv("LINE_CHANNEL_SECRET")
 
 handler = WebhookHandler(channel_secret)
 line_bot_api = MessagingApi(channel_access_token)
 
-# ตั้งค่าชื่อกลุ่มที่ถูกต้องและ Group ID จริง
-EXPECTED_GROUP_NAME = "ลูกค้าOh!dudeVip"
-EXPECTED_GROUP_ID = "YOUR_REAL_GROUP_ID_HERE"  # <--- ใส่ groupId ที่ได้จาก Developer Console
-
-# ข้อความต้อนรับแบบสุ่ม
-greetings = [
-    "👋 ยินดีต้อนรับน้าาา!",
-    "สวัสดีจ้า เข้ากลุ่ม Oh!dude ต้องเฮฮา 💨",
-    "🥳 ยินดีที่ได้รู้จักจ้า มาดูดดื่มกันอย่างปลอดภัย"
-]
+# ✅ เปลี่ยน group_id ให้ตรงกับของกลุ่มคุณ (ดูจาก log ตอนพิมพ์ในกลุ่ม)
+EXPECTED_GROUP_ID = "YOUR_GROUP_ID_HERE"
+EXPECTED_GROUP_NAME = "ลูกค้าOh!dudeVip"  # เปลี่ยนได้ตามจริง
 
 @handler.add(MessageEvent)
 def handle_message(event):
-    if isinstance(event.message, TextMessageContent):
-        msg = event.message.text.lower()
+    if event.source.type == "group":
+        group_id = event.source.group_id
+        print("🟢 Group ID:", group_id)  # ใช้ดู group_id ครั้งแรก
 
-        # 🚫 บล็อกลิงก์ที่ไม่น่าไว้ใจ
-        if any(x in msg for x in ["http", "https", "line.me", "bit.ly", "tinyurl", "qr", "คิวอาร์", "แอดไลน์", "t.me", "ig.me", "@"]) and "ohshop" not in msg:
-            warning = "🚫 กรุณางดส่งลิงก์หรือคิวอาร์โค้ดที่ไม่เกี่ยวข้องกับร้าน Ohshop"
-            line_bot_api.reply_message(
-                ReplyMessageRequest(
-                    reply_token=event.reply_token,
-                    messages=[TextMessage(text=warning)]
-                )
-            )
-
-        # ⚠️ ตรวจสอบชื่อกลุ่มและ Group ID
-        if event.source.type == "group":
-            try:
-                group_id = event.source.group_id
-
-                # ตรวจ group_id ปลอม → ให้ออกจากกลุ่ม
-                if group_id != EXPECTED_GROUP_ID:
-                    line_bot_api.leave_group(group_id)
-                    return
-
-                group_summary = line_bot_api.get_group_summary(group_id)
-                current_name = group_summary.group_name
-
-                if current_name != EXPECTED_GROUP_NAME:
-                    alert = f"⚠️ ระบบตรวจพบว่าชื่อกลุ่มถูกเปลี่ยน กรุณาเปลี่ยนกลับเป็น: {EXPECTED_GROUP_NAME}"
-                    line_bot_api.reply_message(
-                        ReplyMessageRequest(
-                            reply_token=event.reply_token,
-                            messages=[TextMessage(text=alert)]
-                        )
+        # 🔗 Block ลิงก์ไม่เกี่ยวข้อง
+        if isinstance(event.message, TextMessageContent):
+            msg = event.message.text.lower()
+            if ("http://" in msg or "https://" in msg or "line.me" in msg or "qr" in msg or "คิวอาร์" in msg) and "ohshop" not in msg:
+                warning = "🚫 กรุณางดส่งลิงก์หรือคิวอาร์โค้ดที่ไม่เกี่ยวข้องกับร้าน Ohshop"
+                line_bot_api.reply_message(
+                    ReplyMessageRequest(
+                        reply_token=event.reply_token,
+                        messages=[TextMessage(text=warning)]
                     )
-            except Exception as e:
-                print("❌ ดึงชื่อกลุ่มไม่สำเร็จ:", e)
-
-        # ✨ ฟีเจอร์ /help
-        if msg == "/help":
-            help_text = (
-                "🤖 คำสั่งใช้งานของบอท:\n"
-                "• ป้องกันลิงก์ไม่เกี่ยวข้อง\n"
-                "• แจ้งเตือนชื่อกลุ่มถูกเปลี่ยน\n"
-                "• แจ้งเมื่อสมาชิกออกจากกลุ่ม\n"
-                "• ต้อนรับสมาชิกใหม่แบบสุ่ม\n"
-                "• ตรวจสอบกลุ่มปลอม\n"
-                "พิมพ์ /help ได้ตลอดนะจ๊ะ ❤️"
-            )
-            line_bot_api.reply_message(
-                ReplyMessageRequest(
-                    reply_token=event.reply_token,
-                    messages=[TextMessage(text=help_text)]
                 )
-            )
+
+        # 🔁 ตรวจสอบชื่อกลุ่ม
+        try:
+            group_summary = line_bot_api.get_group_summary(group_id)
+            current_name = group_summary.group_name
+            if current_name != EXPECTED_GROUP_NAME:
+                alert = f"⚠️ ระบบตรวจพบว่าชื่อกลุ่มถูกเปลี่ยน กรุณาเปลี่ยนกลับเป็น: {EXPECTED_GROUP_NAME}"
+                line_bot_api.reply_message(
+                    ReplyMessageRequest(
+                        reply_token=event.reply_token,
+                        messages=[TextMessage(text=alert)]
+                    )
+                )
+        except Exception as e:
+            print("❌ ดึงชื่อกลุ่มไม่สำเร็จ:", e)
 
 @handler.add(MemberLeftEvent)
 def handle_member_left(event):
     try:
         group_id = event.source.group_id
-        line_bot_api.push_message(
-            PushMessageRequest(
-                to=group_id,
-                messages=[TextMessage(text="⚠️ แจ้งเตือน: มีสมาชิกออกจากกลุ่ม อาจจะโดนเตะหรือออกเอง")]
+        if group_id == EXPECTED_GROUP_ID:
+            line_bot_api.push_message(
+                PushMessageRequest(
+                    to=group_id,
+                    messages=[TextMessage(text="⚠️ แจ้งเตือน: มีสมาชิกออกจากกลุ่ม อาจจะโดนเตะหรือออกเอง")]
+                )
             )
-        )
     except Exception as e:
-        print("❌ แจ้งเตือนคนออกกลุ่มไม่สำเร็จ:", e)
+        print("❌ แจ้งเตือนคนออกกลุ่มล้มเหลว:", e)
 
 @handler.add(JoinEvent)
 def handle_join(event):
-    welcome_msg = random.choice(greetings)
+    welcome_msg = "👋 สวัสดีจ้า! บอทนี้จะช่วยดูแลไม่ให้เปลี่ยนชื่อกลุ่มหรือส่งลิงก์ที่ไม่เกี่ยวกับ Ohshop นะจ๊ะ"
     line_bot_api.reply_message(
         ReplyMessageRequest(
             reply_token=event.reply_token,
