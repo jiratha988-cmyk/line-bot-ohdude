@@ -13,6 +13,28 @@ channel_secret = os.getenv("LINE_CHANNEL_SECRET")
 
 handler = WebhookHandler(channel_secret)
 line_bot_api = MessagingApi(channel_access_token)
+@handler.add(MessageEvent)
+def handle_message(event):
+    if isinstance(event.message, TextMessageContent):
+        msg = event.message.text.lower()
+        reply = f"บอทได้ยินว่า: '{msg}'"
+        line_bot_api.reply_message(
+            ReplyMessageRequest(
+                reply_token=event.reply_token,
+                messages=[TextMessage(text=reply)]
+            )
+        )
+
+# เมื่อตอนบอทถูกเชิญเข้ากลุ่ม
+@handler.add(JoinEvent)
+def handle_join(event):
+    welcome_msg = "สวัสดีจ้า! ขอบคุณที่เชิญบอทเข้ากลุ่ม 💬"
+    line_bot_api.reply_message(
+        ReplyMessageRequest(
+            reply_token=event.reply_token,
+            messages=[TextMessage(text=welcome_msg)]
+        )
+    )
 
 @app.route("/", methods=["GET"])
 def home():
