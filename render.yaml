@@ -5,4 +5,4 @@ services:
     plan: free
     buildCommand: pip install -r requirements.txt
     startCommand: python app.py
-    runtime: python-3.9
+    runtime: python-3.10
