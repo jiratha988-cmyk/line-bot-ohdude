@@ -13,7 +13,7 @@ app = Flask(__name__)
 channel_access_token = os.getenv("LINE_CHANNEL_ACCESS_TOKEN")
 channel_secret = os.getenv("LINE_CHANNEL_SECRET")
 
-# ตั้งค่า Configuration ให้ถูกต้อง (แก้จากที่เคยผิด)
+# ตั้งค่า Configuration ให้ถูกต้อง
 config = Configuration(access_token=channel_access_token)
 line_bot_api = MessagingApi(config)
 handler = WebhookHandler(channel_secret)
@@ -36,9 +36,11 @@ def callback():
 
     return "OK"
 
-# Event handler: ตอบกลับข้อความที่ผู้ใช้พิมพ์มา
+# ✅ Event handler: ตอบกลับข้อความที่ผู้ใช้พิมพ์มา
 @handler.add(MessageEvent, message=TextMessageContent)
 def handle_message(event):
+    print("🔥 ได้รับข้อความจากผู้ใช้:", event.message.text)
+
     user_message = event.message.text
     reply_message = TextMessage(text=f"คุณพิมพ์ว่า: {user_message}")
     reply_request = ReplyMessageRequest(
