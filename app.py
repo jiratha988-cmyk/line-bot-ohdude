@@ -1,7 +1,10 @@
 from flask import Flask, request, abort
 from linebot import LineBotApi, WebhookHandler
 from linebot.exceptions import InvalidSignatureError
-from linebot.models import *
+from linebot.models import (
+    MessageEvent, TextMessage, TextSendMessage,
+    JoinEvent, LeaveEvent
+)
 import os
 import re
 
@@ -12,7 +15,7 @@ handler = WebhookHandler(os.getenv("LINE_CHANNEL_SECRET"))
 
 @app.route("/")
 def index():
-    return "Bot is running..."
+    return "Bot is running"
 
 @app.route("/callback", methods=["POST"])
 def callback():
@@ -23,63 +26,39 @@ def callback():
         handler.handle(body, signature)
     except InvalidSignatureError:
         abort(400)
+
     return "OK"
 
-# ฟังค์ชันตรวจ link
-def is_bad_link(text):
-    if "http" in text or "https" in text:
-        if "ohshop.line.me" not in text:
-            return True
-    return False
-
-# ตรวจเปลี่ยนชื่อกลุ่ม
-@handler.add(SourceGroup, event=JoinEvent)
-def handle_join(event):
-    line_bot_api.reply_message(
-        event.reply_token,
-        TextSendMessage(text="สวัสดีจ้า บอทจะช่วยดูแลกลุ่มนี้ไม่ให้ใครเปลี่ยนชื่อกลุ่มหรือส่งลิงค์ร้านอื่นนะจ๊ะ ❤️")
-    )
-
-@handler.add(MemberJoinedEvent)
-def welcome(event):
-    for member in event.joined.members:
-        if isinstance(member, SourceUser):
-            line_bot_api.reply_message(
-                event.reply_token,
-                TextSendMessage(text=f"ยินดีต้อนรับ {member.user_id} จ้า ✨")
-            )
-
+# ตรวจจับข้อความผิดกฎ
 @handler.add(MessageEvent, message=TextMessage)
-def handle_text(event):
-    text = event.message.text
+def handle_message(event):
+    msg = event.message.text
+    user_id = event.source.user_id
 
-    # ตรวจลิงก์ต้องห้าม
-    if is_bad_link(text):
-        line_bot_api.reply_message(
-            event.reply_token,
-            TextSendMessage(text="ขออภัย ไม่อนุญาตให้ส่งลิงก์ร้านอื่นในกลุ่มนี้ค่ะ 🚫")
-        )
+    # ลิงก์ทั่วไป
+    forbidden_link = re.search(r"(http|https):\/\/", msg)
+    # ลิงก์ไลน์
+    line_link = re.search(r"(line\.me|line\.me\/R|@|\/ti\/|\/qr)", msg)
+    # QR code (เบื้องต้นให้เช็คว่าเขียนว่า QR หรือแนวๆ นี้)
+    qr_hint = re.search(r"QR", msg, re.IGNORECASE)
+    # เฉพาะของร้าน "Ohshop" ให้ผ่าน
+    allowed_shop = re.search(r"ohshop", msg, re.IGNORECASE)
+
+    if (forbidden_link or line_link or qr_hint) and not allowed_shop:
+        warning_text = "🚫 ห้ามส่งลิงก์หรือคิวอาร์โค้ดที่ไม่เกี่ยวข้องกับร้าน Ohshop"
+        line_bot_api.reply_message(event.reply_token, TextSendMessage(text=warning_text))
         return
 
-    # ตรวจคำว่า line.me หรือ QR
-    if re.search(r"(line\.me|qr code|qr|add me|แอดไลน์)", text, re.IGNORECASE):
-        if "ohshop" not in text:
-            line_bot_api.reply_message(
-                event.reply_token,
-                TextSendMessage(text="ขออภัย ไม่อนุญาตให้แปะไลน์อื่นในกลุ่มนี้ค่ะ ❌")
-            )
-            return
+# ตรวจจับการเปลี่ยนชื่อกลุ่มหรือใครมาใหม่
+@handler.add(JoinEvent)
+def handle_join(event):
+    text = "❗️ระบบแจ้งเตือน: มีการเพิ่มบอทเข้ากลุ่ม\nหากมีการเปลี่ยนชื่อกลุ่ม จะมีการบันทึกไว้"
+    line_bot_api.reply_message(event.reply_token, TextSendMessage(text=text))
 
-@handler.add(GroupNameChangedEvent)
-def handle_group_name_change(event):
-    group_id = event.source.group_id
-    original_name = "กลุ่มของร้าน Ohshop"
-    line_bot_api.set_group_name(group_id, original_name)
-
-    line_bot_api.reply_message(
-        event.reply_token,
-        TextSendMessage(text="ห้ามเปลี่ยนชื่อกลุ่มนะคะ ชื่อถูกตั้งกลับแล้วจ้า 🔒")
-    )
+@handler.add(LeaveEvent)
+def handle_leave(event):
+    # กรณีบอทโดนเตะออก ไม่สามารถตอบกลับได้
+    pass
 
 if __name__ == "__main__":
     port = int(os.environ.get("PORT", 5000))
