@@ -1,8 +1,6 @@
 services:
   - type: web
-    name: line-bot-ohdude
+    name: your-app-name
     env: python
-    plan: free
-    buildCommand: pip install -r requirements.txt
-    startCommand: python app.py
-    runtime: python-3.10
+    buildCommand: "pip install -r requirements.txt"
+    startCommand: "python app.py"
