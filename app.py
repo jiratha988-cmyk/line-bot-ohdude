@@ -20,7 +20,6 @@ def handle_message(event):
     if isinstance(event.message, TextMessageContent):
         msg = event.message.text.lower()
 
-        # 🚫 ตรวจจับลิงก์ที่ไม่เกี่ยวกับ ohshop
         if ("http://" in msg or "https://" in msg or "line.me" in msg or "qr" in msg or "คิวอาร์" in msg) and "ohshop" not in msg:
             warning = "🚫 กรุณางดส่งลิงก์หรือคิวอาร์โค้ดที่ไม่เกี่ยวข้องกับร้าน Ohshop"
             line_bot_api.reply_message(
