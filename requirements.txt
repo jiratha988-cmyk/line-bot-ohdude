@@ -1,4 +1,4 @@
 flask
-aiohttp
+aiohttp==3.9.5
 gunicorn
 line-bot-sdk==3.1.0
