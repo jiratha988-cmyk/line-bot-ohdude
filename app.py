@@ -13,13 +13,14 @@ channel_secret = os.getenv("LINE_CHANNEL_SECRET")
 handler = WebhookHandler(channel_secret)
 line_bot_api = MessagingApi(channel_access_token)
 
-EXPECTED_GROUP_NAME = "ลูกค้าOh!dudeVip"  # 👈 เปลี่ยนตรงนี้ให้ตรงกับชื่อกลุ่มจริง
+EXPECTED_GROUP_NAME = "ลูกค้าOh!dudeVip"  # 👈 เปลี่ยนให้ตรงกับชื่อกลุ่มจริง
 
 @handler.add(MessageEvent)
 def handle_message(event):
     if isinstance(event.message, TextMessageContent):
         msg = event.message.text.lower()
 
+        # ตรวจจับลิงก์ต้องห้าม
         if ("http://" in msg or "https://" in msg or "line.me" in msg or "qr" in msg or "คิวอาร์" in msg) and "ohshop" not in msg:
             warning = "🚫 กรุณางดส่งลิงก์หรือคิวอาร์โค้ดที่ไม่เกี่ยวข้องกับร้าน Ohshop"
             line_bot_api.reply_message(
@@ -29,7 +30,7 @@ def handle_message(event):
                 )
             )
 
-        # ✅ ตรวจสอบชื่อกลุ่ม
+        # ตรวจสอบชื่อกลุ่ม
         if event.source.type == "group":
             try:
                 group_id = event.source.group_id
@@ -50,8 +51,7 @@ def handle_message(event):
 @handler.add(MemberLeftEvent)
 def handle_member_left(event):
     alert = "⚠️ แจ้งเตือน: มีสมาชิกออกจากกลุ่ม อาจจะโดนเตะหรือออกเอง"
-    print(alert)  # ไม่มี reply_token ส่งใน event นี้
-    # ถ้าอยากแจ้งในกลุ่ม ต้องใช้ push message แทน
+    print(alert)  # ยังไม่ได้ส่งเข้าไลน์ เพราะไม่มี reply_token ใน event นี้
 
 @handler.add(JoinEvent)
 def handle_join(event):
