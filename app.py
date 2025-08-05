@@ -9,8 +9,8 @@ import re
 app = Flask(__name__)
 
 # Channel Access Token และ Secret Key จาก LINE Developer Console
-channel_access_token = os.getenv("LINE_CHANNEL_ACCESS_TOKEN")
-channel_secret = os.getenv("LINE_CHANNEL_SECRET")
+channel_access_token = os.getenv("nJ8q2oRAeGr6RJu5HaTacbqcSj6V/G6h3+JqybmQOwrKvBc9+fuazOLFtxN+fudlHIz74JfCGVRel7mfchKJ6JKIM5YtNEIAGhERiuQ/RzdMl+4IdKr/7CqazfL4iH/Re28iKweets0hSHtSnNXtCQdB04t89/1O/w1cDnyilFU=")
+channel_secret = os.getenv("4786ba44508e1a44a245b5c4833d1eeb")
 
 handler = WebhookHandler(channel_secret)
 line_bot_api = MessagingApi(channel_access_token)
