@@ -1,4 +1,3 @@
-aiohttp>=3.9.5
-git add requirements.txt
-git commit -m "add flask to requirements"
-git push
+flask
+aiohttp
+gunicorn
