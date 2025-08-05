@@ -2,5 +2,7 @@ services:
   - type: web
     name: line-bot-ohdude
     env: python
+    plan: free
     buildCommand: pip install -r requirements.txt
     startCommand: python app.py
+    runtime: python-3.10
