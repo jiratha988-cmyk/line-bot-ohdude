@@ -55,48 +55,61 @@ def callback():
 # =============================
 @handler.add(MessageEvent, message=TextMessageContent)
 def handle_message(event):
-    message_text = event.message.text
+    try:
+        message_text = event.message.text
+        user_id = getattr(event.source, 'user_id', None)
+        group_id = getattr(event.source, 'group_id', None)
+        room_id = getattr(event.source, 'room_id', None)
 
-    # ตรวจจับ URL ในข้อความ
-    urls = re.findall(r"https?://[^\s]+", message_text)
-    for url in urls:
-        if not any(url.startswith(prefix) for prefix in ALLOWED_LINK_PREFIXES):
-            line_bot_api.reply_message(
-                ReplyMessageRequest(
-                    reply_token=event.reply_token,
-                    messages=[
-                        TextMessage(text="❌ ลิงก์นี้ไม่ได้รับอนุญาตในกลุ่ม!")
-                    ]
+        print("===== [DEBUG] LINE MESSAGE EVENT =====")
+        print(f"user_id: {user_id}")
+        print(f"group_id: {group_id}")
+        print(f"room_id: {room_id}")
+        print(f"message_text: {message_text}")
+        print("=======================================")
+
+        # ตรวจจับ URL ในข้อความ
+        urls = re.findall(r"https?://[^\s]+", message_text)
+        for url in urls:
+            if not any(url.startswith(prefix) for prefix in ALLOWED_LINK_PREFIXES):
+                line_bot_api.reply_message(
+                    ReplyMessageRequest(
+                        reply_token=event.reply_token,
+                        messages=[TextMessage(text="❌ ลิงก์นี้ไม่ได้รับอนุญาตในกลุ่ม!")]
+                    )
                 )
-            )
-            return
+                return
 
-    # ตอบกลับข้อความปกติ
-    line_bot_api.reply_message(
-        ReplyMessageRequest(
-            reply_token=event.reply_token,
-            messages=[
-                TextMessage(text=f"คุณพิมพ์ว่า: {message_text}")
-            ]
+        # ตอบกลับข้อความปกติ
+        line_bot_api.reply_message(
+            ReplyMessageRequest(
+                reply_token=event.reply_token,
+                messages=[TextMessage(text=f"คุณพิมพ์ว่า: {message_text}")]
+            )
         )
-    )
+
+    except Exception as e:
+        print("⚠️ Error in handle_message:", e)
 
 # =============================
 # แจ้งเตือนเมื่อมีคนออกจากกลุ่ม
 # =============================
 @handler.add(MemberLeftEvent)
 def handle_member_left(event):
-    left_user_ids = [member.user_id for member in event.left.members]
-    for uid in left_user_ids:
-        for admin_id in ADMINS:
-            line_bot_api.push_message(
-                PushMessageRequest(
-                    to=admin_id,
-                    messages=[
-                        TextMessage(text=f"📢 สมาชิก {uid} ออกจากกลุ่มแล้ว")
-                    ]
+    try:
+        left_user_ids = [member.user_id for member in event.left.members]
+        for uid in left_user_ids:
+            for admin_id in ADMINS:
+                line_bot_api.push_message(
+                    PushMessageRequest(
+                        to=admin_id,
+                        messages=[
+                            TextMessage(text=f"📢 สมาชิก {uid} ออกจากกลุ่มแล้ว")
+                        ]
+                    )
                 )
-            )
+    except Exception as e:
+        print("⚠️ Error in handle_member_left:", e)
 
 if __name__ == "__main__":
     app.run(host="0.0.0.0", port=int(os.environ.get("PORT", 10000)))
