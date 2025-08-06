@@ -1,24 +1,31 @@
-from flask import Flask, request, abort
-from linebot.v3 import WebhookHandler
-from linebot.v3.messaging import MessagingApi, ReplyMessageRequest, TextMessage
-from linebot.v3.webhooks import (
-    MessageEvent, TextMessageContent,
-    MemberJoinedEvent, MemberLeftEvent
-)
-from linebot.v3.exceptions import InvalidSignatureError
 import os
 import re
+from flask import Flask, request, abort
+from linebot.v3 import WebhookHandler
+from linebot.v3.messaging import MessagingApi, Configuration, ReplyMessageRequest, TextMessage
+from linebot.v3.webhooks import MessageEvent, TextMessageContent, MemberLeftEvent
+from linebot.v3.exceptions import InvalidSignatureError
 
 app = Flask(__name__)
 
-channel_secret = os.getenv("LINE_CHANNEL_SECRET")
+# === โหลดค่าจาก Environment Variables ===
 channel_access_token = os.getenv("LINE_CHANNEL_ACCESS_TOKEN")
+channel_secret = os.getenv("LINE_CHANNEL_SECRET")
+admin_user_id = os.getenv("LINE_BOT_ADMIN_ID")  # <- ต้องใส่ใน env ด้วย
 
+# === ตั้งค่า LINE Bot ===
+configuration = Configuration(access_token=channel_access_token)
 handler = WebhookHandler(channel_secret)
-line_bot_api = MessagingApi(channel_access_token)
+line_bot_api = MessagingApi(configuration)
 
-ADMINS = ['USERID_ADMIN1', 'USERID_ADMIN2']
-DEFAULT_GROUP_NAME = "Oh!dude Group"
+# === ตั้งค่าผู้ดูแลกลุ่ม ===
+ADMINS = [admin_user_id]
+
+# === ลิงก์ที่อนุญาตให้แชร์ในกลุ่ม (whitelist) ===
+ALLOWED_LINK_PREFIXES = [
+    "https://lin.ee/",
+    "https://yourbrand.com"
+]
 
 @app.route("/", methods=["GET"])
 def home():
@@ -36,51 +43,51 @@ def callback():
 
     return "OK"
 
-def is_unauthorized_link(text):
-    return "line.me" in text and "ohshop" not in text.lower()
-
-def contains_generic_link(text):
-    return bool(re.search(r"(https?://[^\s]+)", text))
-
-@handler.add(MessageEvent)
+@handler.add(MessageEvent, message=TextMessageContent)
 def handle_message(event):
     user_id = event.source.user_id
-    group_id = event.source.group_id
-    text = event.message.text if isinstance(event.message, TextMessageContent) else ""
+    group_id = getattr(event.source, 'group_id', None)
+    message_text = event.message.text
 
-    if user_id not in ADMINS:
-        if is_unauthorized_link(text) or contains_generic_link(text):
+    # === เช็คลิงก์ LINE ว่าเป็นของที่อนุญาตไหม ===
+    if "https://line.me/" in message_text:
+        if not any(message_text.startswith(prefix) for prefix in ALLOWED_LINK_PREFIXES):
             line_bot_api.reply_message(
                 ReplyMessageRequest(
                     reply_token=event.reply_token,
-                    messages=[TextMessage(text="🚫 ห้ามส่งลิงก์หรือ QR Code ที่ไม่ได้รับอนุญาต")]
+                    messages=[TextMessage(text="❌ ห้ามแชร์ลิงก์ LINE ที่ไม่ได้รับอนุญาต!")]
                 )
             )
-            try:
-                line_bot_api.leave_group(group_id)
-            except Exception as e:
-                print(f"เตะผู้ใช้ไม่ได้: {e}")
+            return
 
-@handler.add(MemberJoinedEvent)
-def handle_member_joined(event):
-    group_id = event.source.group_id
-    joined_user_id = event.joined.members[0].user_id
+    # === เช็คว่ามีลิงก์น่าสงสัยอื่น ๆ เช่น youtube, tiktok ===
+    if re.search(r"https?://", message_text) and not any(message_text.startswith(prefix) for prefix in ALLOWED_LINK_PREFIXES):
+        line_bot_api.reply_message(
+            ReplyMessageRequest(
+                reply_token=event.reply_token,
+                messages=[TextMessage(text="⚠️ มีลิงก์ที่ไม่ได้รับอนุญาต โปรดตรวจสอบ")]
+            )
+        )
+        return
 
-    if joined_user_id not in ADMINS:
-        try:
-            line_bot_api.leave_group(group_id)
-        except Exception as e:
-            print(f"เตะไม่ได้: {e}")
+    # === ตอบกลับข้อความตามปกติ (หากไม่ใช่ลิงก์ต้องห้าม) ===
+    line_bot_api.reply_message(
+        ReplyMessageRequest(
+            reply_token=event.reply_token,
+            messages=[TextMessage(text=f"คุณพิมพ์ว่า: {message_text}")]
+        )
+    )
 
 @handler.add(MemberLeftEvent)
 def handle_member_left(event):
-    group_id = event.source.group_id
-    left_user_id = event.left.members[0].user_id
-
-    line_bot_api.push_message(
-        to=group_id,
-        messages=[TextMessage(text=f"⚠️ มีคนโดนเตะออกจากกลุ่ม: {left_user_id}")]
-    )
+    left_user_ids = [left_member.user_id for left_member in event.left.members]
+    for uid in left_user_ids:
+        print(f"สมาชิกออกจากกลุ่ม: {uid}")
+        # ส่งแจ้งเตือนแอดมิน
+        line_bot_api.push_message(
+            to=admin_user_id,
+            messages=[TextMessage(text=f"📢 สมาชิก {uid} ออกจากกลุ่มแล้ว")]
+        )
 
 if __name__ == "__main__":
-    app.run(host="0.0.0.0", port=10000)
+    app.run(debug=False, port=10000)
