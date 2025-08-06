@@ -13,20 +13,20 @@ app = Flask(__name__)
 channel_access_token = os.getenv("LINE_CHANNEL_ACCESS_TOKEN")
 channel_secret = os.getenv("LINE_CHANNEL_SECRET")
 
-# ตั้งค่า Configuration ให้ถูกต้อง
+# ตั้งค่า LINE API
 config = Configuration(access_token=channel_access_token)
 line_bot_api = MessagingApi(config)
 handler = WebhookHandler(channel_secret)
 
-# Endpoint ทดสอบว่าเซิร์ฟเวอร์ยังทำงาน
+# Endpoint เช็กว่าเซิร์ฟเวอร์ยังทำงาน
 @app.route("/", methods=["GET"])
 def home():
     return "LINE Bot is running!"
 
-# Webhook endpoint ที่ LINE จะยิงมาที่นี่
+# Webhook Endpoint
 @app.route("/callback", methods=["POST"])
 def callback():
-    signature = request.headers["X-Line-Signature"]
+    signature = request.headers.get("X-Line-Signature", "")
     body = request.get_data(as_text=True)
 
     try:
@@ -36,7 +36,7 @@ def callback():
 
     return "OK"
 
-# ✅ Event handler: ตอบกลับข้อความที่ผู้ใช้พิมพ์มา
+# ✅ Event: เมื่อมีข้อความเข้ามา
 @handler.add(MessageEvent, message=TextMessageContent)
 def handle_message(event):
     print("🔥 ได้รับข้อความจากผู้ใช้:", event.message.text)
@@ -49,7 +49,7 @@ def handle_message(event):
     )
     line_bot_api.reply_message(reply_request)
 
-# สำหรับรันใน local (Render จะไม่เรียกจากตรงนี้)
+# สำหรับรันบนเครื่อง/Render
 if __name__ == "__main__":
     port = int(os.environ.get("PORT", 10000))
     app.run(host="0.0.0.0", port=port)
