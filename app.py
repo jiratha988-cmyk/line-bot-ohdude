@@ -1,38 +1,23 @@
+from flask import Flask, request, abort
+from linebot import LineBotApi, WebhookHandler
+from linebot.exceptions import InvalidSignatureError
+from linebot.models import (
+    MessageEvent, TextMessage, TextSendMessage,
+    JoinEvent, MemberLeftEvent, GroupNameChangeEvent
+)
 import os
 import re
-from flask import Flask, request, abort
-from linebot.v3.webhook import WebhookHandler
-from linebot.v3.messaging import (
-    MessagingApi,
-    ApiClient,
-    Configuration,
-    ReplyMessageRequest,
-    TextMessage,
-    PushMessageRequest
-)
-from linebot.v3.webhooks import MessageEvent, TextMessageContent, MemberLeftEvent
-from linebot.v3.exceptions import InvalidSignatureError
 
 app = Flask(__name__)
 
-# Load environment variables
-channel_access_token = os.getenv("LINE_CHANNEL_ACCESS_TOKEN")
-channel_secret = os.getenv("LINE_CHANNEL_SECRET")
-admin_user_id = os.getenv("LINE_BOT_ADMIN_ID")
+# ใช้ ENV variables
+line_bot_api = LineBotApi(os.getenv("LINE_CHANNEL_ACCESS_TOKEN"))
+handler = WebhookHandler(os.getenv("LINE_CHANNEL_SECRET"))
 
-# Setup API client and handler
-configuration = Configuration(access_token=channel_access_token)
-api_client = ApiClient(configuration=configuration)
-line_bot_api = MessagingApi(api_client)
-handler = WebhookHandler(channel_secret)
-
-# Admins and allowed links
-ADMINS = [admin_user_id] if admin_user_id else []
-ALLOWED_LINK_PREFIXES = [
-    "https://rebrand.ly/ohdudeshopv1",
-    "https://ohdudeth.com/",
-    "https://lin.ee/"
-]
+# ตั้งชื่อกลุ่มเดิมของร้านที่ต้องการใช้
+DEFAULT_GROUP_NAME = "ลูกค้าOh!dudeVip"
+# ลิงก์ที่อนุญาต เช่น lin.ee/vZzQErv
+ALLOWED_LINKS = ["lin.ee/vZzQErv", "line.me/R/ti/p/@ohshop"]
 
 @app.route("/", methods=["GET"])
 def home():
@@ -40,7 +25,7 @@ def home():
 
 @app.route("/callback", methods=["POST"])
 def callback():
-    signature = request.headers.get("X-Line-Signature")
+    signature = request.headers.get("X-Line-Signature", "")
     body = request.get_data(as_text=True)
 
     try:
@@ -50,42 +35,39 @@ def callback():
 
     return "OK"
 
-# ============ ตรวจจับข้อความและลิงก์ต้องห้าม ============
-@handler.add(MessageEvent, message=TextMessageContent)
-def handle_message(event):
-    message_text = event.message.text
+# ✅ กรณีถูกเตะออกจากกลุ่ม
+@handler.add(MemberLeftEvent)
+def handle_member_left(event):
+    line_bot_api.push_message(
+        event.source.group_id,
+        TextSendMessage(text="🚨 มีคนโดนเตะออกจากกลุ่มนะ ตรวจสอบได้เลย!")
+    )
 
-    urls = re.findall(r"https?://[^\s]+", message_text)
+# ✅ กรณีมีคนเปลี่ยนชื่อกลุ่ม
+@handler.add(GroupNameChangeEvent)
+def handle_group_rename(event):
+    if event.group_name != DEFAULT_GROUP_NAME:
+        line_bot_api.set_group_name(event.source.group_id, DEFAULT_GROUP_NAME)
+        line_bot_api.push_message(
+            event.source.group_id,
+            TextSendMessage(text=f"🚫 เปลี่ยนชื่อกลุ่มไม่ได้! ตั้งกลับเป็น '{DEFAULT_GROUP_NAME}' แล้ว")
+        )
+
+# ✅ กรณีมีการส่งข้อความที่เป็นลิงก์
+@handler.add(MessageEvent, message=TextMessage)
+def handle_message(event):
+    text = event.message.text
+
+    # ตรวจจับลิงก์
+    urls = re.findall(r'https?://[^\s]+', text)
     for url in urls:
-        if not any(url.startswith(prefix) for prefix in ALLOWED_LINK_PREFIXES):
-            line_bot_api.reply_message(
-                ReplyMessageRequest(
-                    reply_token=event.reply_token,
-                    messages=[TextMessage(text="❌ ลิงก์นี้ไม่ได้รับอนุญาตในกลุ่ม!")]
-                )
+        if not any(allowed in url for allowed in ALLOWED_LINKS):
+            # แจ้งเตือนในกลุ่ม
+            line_bot_api.push_message(
+                event.source.group_id,
+                TextSendMessage(text=f"⚠️ ห้ามส่งลิงก์แปลก ๆ ในกลุ่ม: {url}")
             )
             return
 
-    # ตอบข้อความปกติ
-    line_bot_api.reply_message(
-        ReplyMessageRequest(
-            reply_token=event.reply_token,
-            messages=[TextMessage(text=f"คุณพิมพ์ว่า: {message_text}")]
-        )
-    )
-
-# ============ แจ้งเตือนเมื่อมีคนออกจากกลุ่ม ============
-@handler.add(MemberLeftEvent)
-def handle_member_left(event):
-    left_user_ids = [member.user_id for member in event.left.members]
-    for uid in left_user_ids:
-        for admin_id in ADMINS:
-            line_bot_api.push_message(
-                PushMessageRequest(
-                    to=admin_id,
-                    messages=[TextMessage(text=f"📢 สมาชิก {uid} ออกจากกลุ่มแล้ว")]
-                )
-            )
-
-if __name__ == "__main__":
-    app.run(host="0.0.0.0", port=int(os.environ.get("PORT", 10000)))
+    # ไม่ต้องตอบกลับถ้าไม่ใช่ลิงก์นอกแบรนด์
+    return
