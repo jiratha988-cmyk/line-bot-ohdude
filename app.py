@@ -23,8 +23,8 @@ ADMINS = [admin_user_id]
 
 # === ลิงก์ที่อนุญาตให้แชร์ในกลุ่ม (whitelist) ===
 ALLOWED_LINK_PREFIXES = [
-    "https://lin.ee/",
-    "https://yourbrand.com"
+    "https://rebrand.ly/ohdudeshopv1",
+    "https://ohdudeth.com/"
 ]
 
 @app.route("/", methods=["GET"])
