@@ -19,7 +19,7 @@ handler = WebhookHandler(channel_secret)
 line_bot_api = MessagingApi(configuration)
 
 # === ตั้งค่าผู้ดูแลกลุ่ม ===
-ADMINS = [admin_user_id]
+ADMINS = [U11143320df8fd84ab1d58e6b341c2c08]
 
 # === ลิงก์ที่อนุญาตให้แชร์ในกลุ่ม (whitelist) ===
 ALLOWED_LINK_PREFIXES = [
