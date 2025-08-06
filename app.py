@@ -2,30 +2,36 @@ import os
 import re
 from flask import Flask, request, abort
 from linebot.v3 import WebhookHandler
-from linebot.v3.messaging import MessagingApi, Configuration, ReplyMessageRequest, TextMessage, PushMessageRequest
+from linebot.v3.messaging import (
+    MessagingApi,
+    Configuration,
+    ReplyMessageRequest,
+    TextMessage,
+    PushMessageRequest
+)
 from linebot.v3.webhooks import MessageEvent, TextMessageContent, MemberLeftEvent
 from linebot.v3.exceptions import InvalidSignatureError
 
 app = Flask(__name__)
 
-# === โหลดค่าจาก Environment Variables ===
+# โหลดค่าจาก Environment Variables
 channel_access_token = os.getenv("LINE_CHANNEL_ACCESS_TOKEN")
 channel_secret = os.getenv("LINE_CHANNEL_SECRET")
-admin_user_id = os.getenv("LINE_BOT_ADMIN_ID")  # <- ต้องใส่ใน env ด้วย
+admin_user_id = os.getenv("LINE_BOT_ADMIN_ID")  # ใส่ใน Render ด้วย
 
-# === ตั้งค่า LINE Bot ===
+# ตั้งค่า LINE Bot
 configuration = Configuration(access_token=channel_access_token)
 handler = WebhookHandler(channel_secret)
 line_bot_api = MessagingApi(configuration)
 
-# === ตั้งค่าผู้ดูแลกลุ่ม ===
-ADMINS = [admin_user_id] if admin_user_id else []  # รองรับหลายคนในอนาคต
+# ผู้ดูแลกลุ่ม (ใช้สำหรับส่งแจ้งเตือนเวลา member ออกจากกลุ่ม)
+ADMINS = [admin_user_id] if admin_user_id else []
 
-# === ลิงก์ที่อนุญาตให้แชร์ในกลุ่ม (whitelist) ===
+# ลิงก์ที่อนุญาตให้โพสต์ได้
 ALLOWED_LINK_PREFIXES = [
     "https://rebrand.ly/ohdudeshopv1",
     "https://ohdudeth.com/",
-    "https://lin.ee/"  # ถ้าอยากให้ลิงก์ lin.ee ผ่านด้วย
+    "https://lin.ee/"
 ]
 
 @app.route("/", methods=["GET"])
@@ -44,43 +50,51 @@ def callback():
 
     return "OK"
 
+# =============================
+# ตรวจจับข้อความและลิงก์ต้องห้าม
+# =============================
 @handler.add(MessageEvent, message=TextMessageContent)
 def handle_message(event):
-    user_id = event.source.user_id
-    group_id = getattr(event.source, 'group_id', None)
     message_text = event.message.text
 
-    # === ตรวจจับลิงก์ทั้งหมดจากข้อความ ===
+    # ตรวจจับ URL ในข้อความ
     urls = re.findall(r"https?://[^\s]+", message_text)
-
     for url in urls:
         if not any(url.startswith(prefix) for prefix in ALLOWED_LINK_PREFIXES):
             line_bot_api.reply_message(
                 ReplyMessageRequest(
                     reply_token=event.reply_token,
-                    messages=[TextMessage(text="❌ ลิงก์นี้ไม่ได้รับอนุญาตในกลุ่ม!")]
+                    messages=[
+                        TextMessage(text="❌ ลิงก์นี้ไม่ได้รับอนุญาตในกลุ่ม!")
+                    ]
                 )
             )
             return
 
-    # === ตอบกลับข้อความปกติ (ไม่เจอลิงก์ต้องห้าม) ===
+    # ตอบกลับข้อความปกติ
     line_bot_api.reply_message(
         ReplyMessageRequest(
             reply_token=event.reply_token,
-            messages=[TextMessage(text=f"คุณพิมพ์ว่า: {message_text}")]
+            messages=[
+                TextMessage(text=f"คุณพิมพ์ว่า: {message_text}")
+            ]
         )
     )
 
+# =============================
+# แจ้งเตือนเมื่อมีคนออกจากกลุ่ม
+# =============================
 @handler.add(MemberLeftEvent)
 def handle_member_left(event):
-    left_user_ids = [left_member.user_id for left_member in event.left.members]
+    left_user_ids = [member.user_id for member in event.left.members]
     for uid in left_user_ids:
-        print(f"สมาชิกออกจากกลุ่ม: {uid}")
         for admin_id in ADMINS:
             line_bot_api.push_message(
                 PushMessageRequest(
                     to=admin_id,
-                    messages=[TextMessage(text=f"📢 สมาชิก {uid} ออกจากกลุ่มแล้ว")]
+                    messages=[
+                        TextMessage(text=f"📢 สมาชิก {uid} ออกจากกลุ่มแล้ว")
+                    ]
                 )
             )
 
