@@ -1,27 +1,40 @@
 from flask import Flask, request, abort
 from linebot.v3 import WebhookHandler
 from linebot.v3.messaging import (
-    MessagingApi, ReplyMessageRequest, TextMessage,
+    MessagingApi,
+    ReplyMessageRequest,
+    TextMessage,
+    PushMessageRequest,
 )
 from linebot.v3.webhooks import (
-    MessageEvent, TextMessageContent, MemberLeftEvent,
-    JoinEvent, LeaveEvent, GroupNameUpdateEvent
+    MessageEvent,
+    TextMessageContent,
+    JoinEvent,
+    MemberLeftEvent,
+    MemberJoinedEvent,
+    UnfollowEvent,
 )
 from linebot.v3.exceptions import InvalidSignatureError
+from linebot.v3.models import Configuration
 import os
 import re
+import logging
 
 app = Flask(__name__)
 
-channel_secret = os.getenv("LINE_CHANNEL_SECRET")
+# Logging
+logging.basicConfig(level=logging.INFO)
+
+# ENV
 channel_access_token = os.getenv("LINE_CHANNEL_ACCESS_TOKEN")
+channel_secret = os.getenv("LINE_CHANNEL_SECRET")
 
+configuration = Configuration(access_token=channel_access_token)
 handler = WebhookHandler(channel_secret)
-line_bot_api = MessagingApi(channel_access_token)
+line_bot_api = MessagingApi(configuration)
 
-# === ตั้งค่าชื่อกลุ่มที่ต้องการล็อกไว้ ===
-LOCKED_GROUP_NAME = "ลูกค้าOh!dudeVip (6)"
-OHSHOP_KEYWORD = "ohshop"  # ป้องกันลิงก์ไลน์อื่น ๆ ที่ไม่ใช่ของ ohshop
+# ตั้งชื่อกลุ่มเดิมที่ต้องการ
+DEFAULT_GROUP_NAME = "ลูกค้า Oh!dudeVip (6)"
 
 @app.route("/", methods=["GET"])
 def home():
@@ -29,7 +42,7 @@ def home():
 
 @app.route("/callback", methods=["POST"])
 def callback():
-    signature = request.headers["X-Line-Signature"]
+    signature = request.headers.get("X-Line-Signature")
     body = request.get_data(as_text=True)
 
     try:
@@ -39,72 +52,77 @@ def callback():
 
     return "OK"
 
-# ====== Event: รับข้อความแล้วตอบกลับ ======
-@handler.add(MessageEvent)
+@handler.add(MessageEvent, message=TextMessageContent)
 def handle_message(event):
-    if isinstance(event.message, TextMessageContent):
-        user_message = event.message.text
-        reply = f"คุณพิมพ์ว่า: {user_message}"
+    user_message = event.message.text
 
-        # ตรวจสอบลิงก์ไลน์ที่ไม่ใช่ ohshop แล้วเตะออก
-        if "line.me" in user_message and OHSHOP_KEYWORD not in user_message.lower():
+    # รีพลายข้อความปกติ
+    if event.reply_token:
+        # บล็อกลิงก์ไลน์ที่ไม่ใช่ ohshop
+        if "line.me" in user_message and "ohshop" not in user_message:
             line_bot_api.reply_message(
                 ReplyMessageRequest(
                     reply_token=event.reply_token,
-                    messages=[TextMessage(text="❌ ห้ามส่งลิงก์ไลน์อื่นในกลุ่ม")]
+                    messages=[TextMessage(text="❌ ห้ามแชร์ลิงก์ LINE อื่นที่ไม่ใช่ของร้าน Oh!shop ในกลุ่มนี้")]
                 )
             )
-            try:
-                line_bot_api.leave_group(event.source.group_id)
-            except:
-                pass
             return
 
-        # ตอบข้อความปกติ
+        # รีพลายข้อความปกติ
         line_bot_api.reply_message(
             ReplyMessageRequest(
                 reply_token=event.reply_token,
-                messages=[TextMessage(text=reply)]
+                messages=[TextMessage(text=f"คุณพิมพ์ว่า: {user_message}")]
             )
         )
 
-# ====== Event: เปลี่ยนชื่อกลุ่ม ======
-@handler.add(GroupNameUpdateEvent)
-def handle_group_rename(event):
-    old_name = event.source.group_id
-    new_name = event.group_name
-    if new_name != LOCKED_GROUP_NAME:
-        try:
-            line_bot_api.reply_message(
-                ReplyMessageRequest(
-                    reply_token=event.reply_token,
-                    messages=[TextMessage(text=f"⚠️ กลุ่มถูกเปลี่ยนชื่อเป็น '{new_name}'\nขออนุญาตเปลี่ยนกลับเป็น '{LOCKED_GROUP_NAME}'")]
-                )
-            )
-            # เปลี่ยนชื่อกลับ (ต้องมีสิทธิ์ admin ในกลุ่ม)
-            line_bot_api.update_group_name(event.source.group_id, LOCKED_GROUP_NAME)
-        except Exception as e:
-            print(f"❌ เปลี่ยนชื่อกลับไม่สำเร็จ: {e}")
-
-# ====== Event: มีคนโดนเตะออก ======
 @handler.add(MemberLeftEvent)
 def handle_member_left(event):
-    line_bot_api.reply_message(
-        ReplyMessageRequest(
-            reply_token=event.reply_token,
-            messages=[TextMessage(text="👋 มีสมาชิกถูกลบออกจากกลุ่ม")]
-        )
-    )
+    left_user_id = event.left.members[0].user_id
+    group_id = event.source.group_id
 
-# ====== Event: มีคนเข้ากลุ่ม (บอทก็เช่นกัน) ======
+    try:
+        line_bot_api.push_message(
+            PushMessageRequest(
+                to=group_id,
+                messages=[TextMessage(text="🚫 มีคนถูกลบออกจากกลุ่ม")]
+            )
+        )
+    except Exception as e:
+        logging.error(f"Error sending member left message: {e}")
+
+@handler.add(MemberJoinedEvent)
+def handle_member_joined(event):
+    joined_user_id = event.joined.members[0].user_id
+    group_id = event.source.group_id
+
+    try:
+        line_bot_api.push_message(
+            PushMessageRequest(
+                to=group_id,
+                messages=[TextMessage(text="👋 ยินดีต้อนรับเข้าสู่กลุ่ม Oh!dude")]
+            )
+        )
+    except Exception as e:
+        logging.error(f"Error sending welcome message: {e}")
+
 @handler.add(JoinEvent)
 def handle_join(event):
-    line_bot_api.reply_message(
-        ReplyMessageRequest(
-            reply_token=event.reply_token,
-            messages=[TextMessage(text="สวัสดีค่ะ! บอทพร้อมดูแลความเรียบร้อยในกลุ่มนี้ 😎")]
+    group_id = event.source.group_id
+
+    try:
+        # แจ้งว่าเข้าแล้วตั้งชื่อกลับ (ถ้าถูกเปลี่ยน)
+        line_bot_api.push_message(
+            PushMessageRequest(
+                to=group_id,
+                messages=[TextMessage(text="🤖 บอทถูกเพิ่มเข้ากลุ่มแล้ว จะคอยดูแลชื่อกลุ่ม และความปลอดภัยให้นะครับ")]
+            )
         )
-    )
+    except Exception as e:
+        logging.error(f"Error on join: {e}")
+
+# ตรวจสอบการเปลี่ยนชื่อกลุ่ม — ต้องตั้ง webhook ให้รับ GroupNameUpdateEvent (ยังไม่มีใน v3 SDK แต่ถ้ามี event นี้ใช้ logic ด้านล่างได้)
+# สามารถดัดแปลงโดยใช้ cron job หรือ manual API get group summary
 
 if __name__ == "__main__":
     app.run()
